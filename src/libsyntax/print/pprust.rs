@@ -29,6 +29,7 @@ use print::pprust;
 
 use std::char;
 use std::io;
+use std::cmp;
 
 // The @ps is stored here to prevent recursive type.
 pub enum ann_node<'self> {
@@ -2181,9 +2182,38 @@ pub fn print_comment(s: @ps, cmnt: &comments::cmnt) {
 }
 
 pub fn print_string(s: @ps, st: &str) {
-    word(s.s, "\"");
-    word(s.s, st.escape_default());
-    word(s.s, "\"");
+    // make an ad-hoc decision whether to print `st` as a raw string literal
+    // will need this many '#' on each side for a raw string
+    let mut hash_longest = 0u;
+    let mut hash_count = 0u;
+    // start with two quotes + body for an escaped string, then count \ and "
+    let mut len_escaped = 2u + st.len();
+
+    for c in st.iter() {
+        if c == '\\' || c == '"' {
+            len_escaped += 1;
+        }
+
+        // keep track of longest sequence of a `"` followed by many `#`
+        if c == '#' {
+            if hash_count != 0 { hash_count += 1; }
+        } else {
+            if c == '"' { hash_count = 1; }
+            else { hash_count = 0; }
+        }
+        hash_longest = cmp::max(hash_longest, hash_count);
+    }
+     // 'r' plus two quotes plus '#' symbols plus body
+    let len_raw = 3u + hash_longest * 2 + st.len();
+
+    let lit = if len_escaped > len_raw {
+        format!("r{delim}\"{string}\"{delim}",
+                delim="#".repeat(hash_longest), string=st)
+    } else {
+        format!("\"{}\"", st.escape_default())
+    };
+
+    word(s.s, lit);
 }
 
 pub fn to_str<T>(t: &T, f: &fn(@ps, &T), intr: @ident_interner) -> ~str {
