@@ -83,6 +83,26 @@ fn writeFile(file_path: &Path, contents: &str) {
     out.write_line(contents);
 }
 
+struct TmpDirDeleter(Path);
+
+impl Drop for TmpDirDeleter {
+    fn drop(&mut self) {
+        let ref path = **self;
+        debug2!("deleting `{}`", path.to_str());
+        assert!(os::tmpdir().is_ancestor_of(path))
+        if (!os::remove_dir_recursive(path)) {
+            error2!("failed to remove `{}`", path.to_str());
+        }
+    }
+}
+
+impl TmpDirDeleter {
+    fn new(path: &Path) -> TmpDirDeleter {
+        debug2!("remembering to delete `{}`", path.to_str());
+        TmpDirDeleter(path.clone())
+    }
+}
+
 fn mk_empty_workspace(short_name: &Path, version: &Version, tag: &str) -> Path {
     let workspace_dir = mkdtemp(&os::tmpdir(), tag).expect("couldn't create temp dir");
     mk_workspace(&workspace_dir, short_name, version);
@@ -525,6 +545,7 @@ fn test_install_valid() {
     debug2!("sysroot = {}", sysroot.to_str());
     let temp_pkg_id = fake_pkg();
     let temp_workspace = mk_temp_workspace(&temp_pkg_id.path, &NoVersion).pop().pop();
+    let _deleter = TmpDirDeleter::new(&temp_workspace);
     let ctxt = fake_ctxt(sysroot, &temp_workspace);
     debug2!("temp_workspace = {}", temp_workspace.to_str());
     // should have test, bench, lib, and main
@@ -553,6 +574,7 @@ fn test_install_invalid() {
     let sysroot = test_sysroot();
     let pkgid = fake_pkg();
     let temp_workspace = mkdtemp(&os::tmpdir(), "test").expect("couldn't create temp dir");
+    let _deleter = TmpDirDeleter::new(&temp_workspace);
     let ctxt = fake_ctxt(sysroot, &temp_workspace);
 
     // Uses task::try because of #9001
@@ -572,6 +594,7 @@ fn test_install_git() {
     debug2!("sysroot = {}", sysroot.to_str());
     let temp_pkg_id = git_repo_pkg();
     let repo = init_git_repo(&temp_pkg_id.path);
+    let _deleter = TmpDirDeleter::new(&repo);
     debug2!("repo = {}", repo.to_str());
     let repo_subdir = repo.push_many([~"mockgithub.com", ~"catamorphism", ~"test-pkg"]);
     debug2!("repo_subdir = {}", repo_subdir.to_str());
@@ -661,6 +684,7 @@ fn test_package_ids_must_be_relative_path_like() {
 fn test_package_version() {
     let local_path = "mockgithub.com/catamorphism/test_pkg_version";
     let repo = init_git_repo(&Path(local_path));
+    let _deleter = TmpDirDeleter::new(&repo);
     let repo_subdir = repo.push_many([~"mockgithub.com", ~"catamorphism", ~"test_pkg_version"]);
     debug2!("Writing files in: {}", repo_subdir.to_str());
     writeFile(&repo_subdir.push("main.rs"),
@@ -696,6 +720,7 @@ fn test_package_version() {
 fn test_package_request_version() {
     let local_path = "mockgithub.com/catamorphism/test_pkg_version";
     let repo = init_git_repo(&Path(local_path));
+    let _deleter = TmpDirDeleter::new(&repo);
     let repo_subdir = repo.push_many([~"mockgithub.com", ~"catamorphism", ~"test_pkg_version"]);
     debug2!("Writing files in: {}", repo_subdir.to_str());
     writeFile(&repo_subdir.push("main.rs"),
@@ -738,6 +763,7 @@ fn test_package_request_version() {
 #[ignore (reason = "http-client not ported to rustpkg yet")]
 fn rustpkg_install_url_2() {
     let temp_dir = mkdtemp(&os::tmpdir(), "rustpkg_install_url_2").expect("rustpkg_install_url_2");
+    let _deleter = TmpDirDeleter::new(&temp_dir);
     command_line_test([~"install", ~"github.com/mozilla-servo/rust-http-client"],
                      &temp_dir);
 }
@@ -745,6 +771,7 @@ fn rustpkg_install_url_2() {
 #[test]
 fn rustpkg_library_target() {
     let foo_repo = init_git_repo(&Path("foo"));
+    let _deleter = TmpDirDeleter::new(&foo_repo);
     let package_dir = foo_repo.push("foo");
 
     debug2!("Writing files in: {}", package_dir.to_str());
@@ -765,6 +792,7 @@ fn rustpkg_library_target() {
 #[test]
 fn rustpkg_local_pkg() {
     let dir = create_local_package(&PkgId::new("foo"));
+    let _deleter = TmpDirDeleter::new(&dir);
     command_line_test([~"install", ~"foo"], &dir);
     assert_executable_exists(&dir, "foo");
 }
@@ -773,6 +801,7 @@ fn rustpkg_local_pkg() {
 #[ignore (reason = "test makes bogus assumptions about build directory layout: issue #8690")]
 fn package_script_with_default_build() {
     let dir = create_local_package(&PkgId::new("fancy-lib"));
+    let _deleter = TmpDirDeleter::new(&dir);
     debug2!("dir = {}", dir.to_str());
     let source = test_sysroot().pop().pop().pop().push_many(
         [~"src", ~"librustpkg", ~"testsuite", ~"pass", ~"src", ~"fancy-lib", ~"pkg.rs"]);
@@ -788,8 +817,9 @@ fn package_script_with_default_build() {
 
 #[test]
 fn rustpkg_build_no_arg() {
-    let tmp = mkdtemp(&os::tmpdir(), "rustpkg_build_no_arg").expect("rustpkg_build_no_arg failed")
-              .push(".rust");
+    let tmp = mkdtemp(&os::tmpdir(), "rustpkg_build_no_arg").expect("rustpkg_build_no_arg failed");
+    let _deleter = TmpDirDeleter::new(&tmp);
+    let tmp = tmp.push(".rust");
     let package_dir = tmp.push_many([~"src", ~"foo"]);
     assert!(os::mkdir_recursive(&package_dir, U_RWX));
 
@@ -803,8 +833,9 @@ fn rustpkg_build_no_arg() {
 #[test]
 fn rustpkg_install_no_arg() {
     let tmp = mkdtemp(&os::tmpdir(),
-                      "rustpkg_install_no_arg").expect("rustpkg_install_no_arg failed")
-              .push(".rust");
+                      "rustpkg_install_no_arg").expect("rustpkg_install_no_arg failed");
+    let _deleter = TmpDirDeleter::new(&tmp);
+    let tmp = tmp.push(".rust");
     let package_dir = tmp.push_many([~"src", ~"foo"]);
     assert!(os::mkdir_recursive(&package_dir, U_RWX));
     writeFile(&package_dir.push("lib.rs"),
@@ -816,8 +847,9 @@ fn rustpkg_install_no_arg() {
 
 #[test]
 fn rustpkg_clean_no_arg() {
-    let tmp = mkdtemp(&os::tmpdir(), "rustpkg_clean_no_arg").expect("rustpkg_clean_no_arg failed")
-              .push(".rust");
+    let tmp = mkdtemp(&os::tmpdir(), "rustpkg_clean_no_arg").expect("rustpkg_clean_no_arg failed");
+    let _deleter = TmpDirDeleter::new(&tmp);
+    let tmp = tmp.push(".rust");
     let package_dir = tmp.push_many([~"src", ~"foo"]);
     assert!(os::mkdir_recursive(&package_dir, U_RWX));
 
@@ -834,6 +866,7 @@ fn rustpkg_clean_no_arg() {
 #[test]
 fn rust_path_test() {
     let dir_for_path = mkdtemp(&os::tmpdir(), "more_rust").expect("rust_path_test failed");
+    let _deleter = TmpDirDeleter::new(&dir_for_path);
     let dir = mk_workspace(&dir_for_path, &Path("foo"), &NoVersion);
     debug2!("dir = {}", dir.to_str());
     writeFile(&dir.push("main.rs"), "fn main() { let _x = (); }");
@@ -851,6 +884,7 @@ fn rust_path_test() {
 #[ignore] // FIXME(#9184) tests can't change the cwd (other tests are sad then)
 fn rust_path_contents() {
     let dir = mkdtemp(&os::tmpdir(), "rust_path").expect("rust_path_contents failed");
+    let _deleter = TmpDirDeleter::new(&dir);
     let abc = &dir.push_many([~"A", ~"B", ~"C"]);
     assert!(os::mkdir_recursive(&abc.push(".rust"), U_RWX));
     assert!(os::mkdir_recursive(&abc.pop().push(".rust"), U_RWX));
@@ -882,6 +916,7 @@ fn rust_path_parse() {
 #[test]
 fn test_list() {
     let dir = mkdtemp(&os::tmpdir(), "test_list").expect("test_list failed");
+    let _deleter = TmpDirDeleter::new(&dir);
     let foo = PkgId::new("foo");
     create_local_package_in(&foo, &dir);
     let bar = PkgId::new("bar");
@@ -910,6 +945,7 @@ fn test_list() {
 #[test]
 fn install_remove() {
     let dir = mkdtemp(&os::tmpdir(), "install_remove").expect("install_remove");
+    let _deleter = TmpDirDeleter::new(&dir);
     let foo = PkgId::new("foo");
     let bar = PkgId::new("bar");
     let quux = PkgId::new("quux");
@@ -937,6 +973,7 @@ fn install_check_duplicates() {
     // ("Is already installed -- doing nothing")
     // check invariant that there are no dups in the pkg database
     let dir = mkdtemp(&os::tmpdir(), "install_remove").expect("install_remove");
+    let _deleter = TmpDirDeleter::new(&dir);
     let foo = PkgId::new("foo");
     create_local_package_in(&foo, &dir);
 
@@ -959,6 +996,7 @@ fn install_check_duplicates() {
 fn no_rebuilding() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([~"build", ~"foo"], &workspace);
     let date = datestamp(&built_library_in_workspace(&p_id,
                                                     &workspace).expect("no_rebuilding"));
@@ -973,6 +1011,7 @@ fn no_rebuilding_dep() {
     let p_id = PkgId::new("foo");
     let dep_id = PkgId::new("bar");
     let workspace = create_local_package_with_dep(&p_id, &dep_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([~"build", ~"foo"], &workspace);
     let bar_lib = lib_output_file_name(&workspace, "bar");
     let bar_date_1 = datestamp(&bar_lib);
@@ -999,6 +1038,7 @@ fn do_rebuild_dep_dates_change() {
     let p_id = PkgId::new("foo");
     let dep_id = PkgId::new("bar");
     let workspace = create_local_package_with_dep(&p_id, &dep_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([~"build", ~"foo"], &workspace);
     let bar_lib_name = lib_output_file_name(&workspace, "bar");
     let bar_date = datestamp(&bar_lib_name);
@@ -1016,6 +1056,7 @@ fn do_rebuild_dep_only_contents_change() {
     let p_id = PkgId::new("foo");
     let dep_id = PkgId::new("bar");
     let workspace = create_local_package_with_dep(&p_id, &dep_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([~"build", ~"foo"], &workspace);
     let bar_date = datestamp(&lib_output_file_name(&workspace, "bar"));
     frob_source_file(&workspace, &dep_id, "lib.rs");
@@ -1028,7 +1069,9 @@ fn do_rebuild_dep_only_contents_change() {
 #[test]
 fn test_versions() {
     let workspace = create_local_package(&PkgId::new("foo#0.1"));
-    create_local_package(&PkgId::new("foo#0.2"));
+    let _deleter = TmpDirDeleter::new(&workspace);
+    let workspace_2 = create_local_package(&PkgId::new("foo#0.2"));
+    let _deleter = TmpDirDeleter::new(&workspace_2);
     command_line_test([~"install", ~"foo#0.1"], &workspace);
     let output = command_line_test_output([~"list"]);
     // make sure output includes versions
@@ -1040,6 +1083,7 @@ fn test_versions() {
 fn test_build_hooks() {
     let workspace = create_local_package_with_custom_build_hook(&PkgId::new("foo"),
                                                                 "frob");
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([~"do", ~"foo", ~"frob"], &workspace);
 }
 
@@ -1049,6 +1093,7 @@ fn test_build_hooks() {
 fn test_info() {
     let expected_info = ~"package foo"; // fill in
     let workspace = create_local_package(&PkgId::new("foo"));
+    let _deleter = TmpDirDeleter::new(&workspace);
     let output = command_line_test([~"info", ~"foo"], &workspace);
     assert_eq!(str::from_utf8(output.output), expected_info);
 }
@@ -1056,6 +1101,7 @@ fn test_info() {
 #[test]
 fn test_uninstall() {
     let workspace = create_local_package(&PkgId::new("foo"));
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([~"uninstall", ~"foo"], &workspace);
     let output = command_line_test([~"list"], &workspace);
     assert!(!str::from_utf8(output.output).contains("foo"));
@@ -1065,6 +1111,7 @@ fn test_uninstall() {
 fn test_non_numeric_tag() {
     let temp_pkg_id = git_repo_pkg();
     let repo = init_git_repo(&temp_pkg_id.path);
+    let _deleter = TmpDirDeleter::new(&repo);
     let repo_subdir = repo.push_many([~"mockgithub.com", ~"catamorphism", ~"test-pkg"]);
     writeFile(&repo_subdir.push("foo"), "foo");
     writeFile(&repo_subdir.push("lib.rs"),
@@ -1087,8 +1134,10 @@ fn test_non_numeric_tag() {
 #[test]
 fn test_extern_mod() {
     let dir = mkdtemp(&os::tmpdir(), "test_extern_mod").expect("test_extern_mod");
+    let _deleter = TmpDirDeleter::new(&dir);
     let main_file = dir.push("main.rs");
     let lib_depend_dir = mkdtemp(&os::tmpdir(), "foo").expect("test_extern_mod");
+    let _deleter = TmpDirDeleter::new(&lib_depend_dir);
     let aux_dir = lib_depend_dir.push_many(["src", "mockgithub.com", "catamorphism", "test_pkg"]);
     assert!(os::mkdir_recursive(&aux_dir, U_RWX));
     let aux_pkg_file = aux_dir.push("lib.rs");
@@ -1130,8 +1179,10 @@ fn test_extern_mod() {
 #[test]
 fn test_extern_mod_simpler() {
     let dir = mkdtemp(&os::tmpdir(), "test_extern_mod_simpler").expect("test_extern_mod_simpler");
+    let _deleter = TmpDirDeleter::new(&dir);
     let main_file = dir.push("main.rs");
     let lib_depend_dir = mkdtemp(&os::tmpdir(), "foo").expect("test_extern_mod_simpler");
+    let _deleter = TmpDirDeleter::new(&lib_depend_dir);
     let aux_dir = lib_depend_dir.push_many(["src", "rust-awesomeness"]);
     assert!(os::mkdir_recursive(&aux_dir, U_RWX));
     let aux_pkg_file = aux_dir.push("lib.rs");
@@ -1180,6 +1231,7 @@ fn test_extern_mod_simpler() {
 fn test_import_rustpkg() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     writeFile(&workspace.push_many([~"src", ~"foo-0.1", ~"pkg.rs"]),
               "extern mod rustpkg; fn main() {}");
     command_line_test([~"build", ~"foo"], &workspace);
@@ -1192,6 +1244,7 @@ fn test_import_rustpkg() {
 fn test_macro_pkg_script() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     writeFile(&workspace.push_many([~"src", ~"foo-0.1", ~"pkg.rs"]),
               "extern mod rustpkg; fn main() { debug2!(\"Hi\"); }");
     command_line_test([~"build", ~"foo"], &workspace);
@@ -1207,13 +1260,16 @@ fn multiple_workspaces() {
 // Set the RUST_PATH to A:B
 // Make a third package that uses foo, make sure we can build/install it
     let a_loc = mk_temp_workspace(&Path("foo"), &NoVersion).pop().pop();
+    let _deleter = TmpDirDeleter::new(&a_loc);
     let b_loc = mk_temp_workspace(&Path("foo"), &NoVersion).pop().pop();
+    let _deleter = TmpDirDeleter::new(&b_loc);
     debug2!("Trying to install foo in {}", a_loc.to_str());
     command_line_test([~"install", ~"foo"], &a_loc);
     debug2!("Trying to install foo in {}", b_loc.to_str());
     command_line_test([~"install", ~"foo"], &b_loc);
     let env = Some(~[(~"RUST_PATH", format!("{}:{}", a_loc.to_str(), b_loc.to_str()))]);
     let c_loc = create_local_package_with_dep(&PkgId::new("bar"), &PkgId::new("foo"));
+    let _deleter = TmpDirDeleter::new(&c_loc);
     command_line_test_with_env([~"install", ~"bar"], &c_loc, env);
 }
 
@@ -1228,7 +1284,9 @@ fn rust_path_hack_test(hack_flag: bool) {
 */
    let p_id = PkgId::new("foo");
    let workspace = create_local_package(&p_id);
+   let _deleter = TmpDirDeleter::new(&workspace);
    let dest_workspace = mk_empty_workspace(&Path("bar"), &NoVersion, "dest_workspace");
+   let _deleter = TmpDirDeleter::new(&dest_workspace);
    let rust_path = Some(~[(~"RUST_PATH",
        format!("{}:{}",
                dest_workspace.to_str(),
@@ -1268,11 +1326,13 @@ fn test_rust_path_can_contain_package_dirs_without_flag() {
 fn rust_path_hack_cwd() {
    // Same as rust_path_hack_test, but the CWD is the dir to build out of
    let cwd = mkdtemp(&os::tmpdir(), "foo").expect("rust_path_hack_cwd");
+   let _deleter = TmpDirDeleter::new(&cwd);
    let cwd = cwd.push("foo");
    assert!(os::mkdir_recursive(&cwd, U_RWX));
    writeFile(&cwd.push("lib.rs"), "pub fn f() { }");
 
    let dest_workspace = mk_empty_workspace(&Path("bar"), &NoVersion, "dest_workspace");
+   let _deleter = TmpDirDeleter::new(&dest_workspace);
    let rust_path = Some(~[(~"RUST_PATH", dest_workspace.to_str())]);
    command_line_test_with_env([~"install", ~"--rust-path-hack", ~"foo"], &cwd, rust_path);
    debug2!("Checking that foo exists in {}", dest_workspace.to_str());
@@ -1286,12 +1346,14 @@ fn rust_path_hack_cwd() {
 fn rust_path_hack_multi_path() {
    // Same as rust_path_hack_test, but with a more complex package ID
    let cwd = mkdtemp(&os::tmpdir(), "pkg_files").expect("rust_path_hack_cwd");
+   let _deleter = TmpDirDeleter::new(&cwd);
    let subdir = cwd.push_many([~"foo", ~"bar", ~"quux"]);
    assert!(os::mkdir_recursive(&subdir, U_RWX));
    writeFile(&subdir.push("lib.rs"), "pub fn f() { }");
    let name = ~"foo/bar/quux";
 
    let dest_workspace = mk_empty_workspace(&Path("bar"), &NoVersion, "dest_workspace");
+   let _deleter = TmpDirDeleter::new(&dest_workspace);
    let rust_path = Some(~[(~"RUST_PATH", dest_workspace.to_str())]);
    command_line_test_with_env([~"install", ~"--rust-path-hack", name.clone()], &subdir, rust_path);
    debug2!("Checking that {} exists in {}", name, dest_workspace.to_str());
@@ -1305,11 +1367,13 @@ fn rust_path_hack_multi_path() {
 fn rust_path_hack_install_no_arg() {
    // Same as rust_path_hack_cwd, but making rustpkg infer the pkg id
    let cwd = mkdtemp(&os::tmpdir(), "pkg_files").expect("rust_path_hack_install_no_arg");
+   let _deleter = TmpDirDeleter::new(&cwd);
    let source_dir = cwd.push("foo");
    assert!(make_dir_rwx(&source_dir));
    writeFile(&source_dir.push("lib.rs"), "pub fn f() { }");
 
    let dest_workspace = mk_empty_workspace(&Path("bar"), &NoVersion, "dest_workspace");
+   let _deleter = TmpDirDeleter::new(&dest_workspace);
    let rust_path = Some(~[(~"RUST_PATH", dest_workspace.to_str())]);
    command_line_test_with_env([~"install", ~"--rust-path-hack"], &source_dir, rust_path);
    debug2!("Checking that foo exists in {}", dest_workspace.to_str());
@@ -1323,11 +1387,13 @@ fn rust_path_hack_install_no_arg() {
 fn rust_path_hack_build_no_arg() {
    // Same as rust_path_hack_install_no_arg, but building instead of installing
    let cwd = mkdtemp(&os::tmpdir(), "pkg_files").expect("rust_path_hack_build_no_arg");
+   let _deleter = TmpDirDeleter::new(&cwd);
    let source_dir = cwd.push("foo");
    assert!(make_dir_rwx(&source_dir));
    writeFile(&source_dir.push("lib.rs"), "pub fn f() { }");
 
    let dest_workspace = mk_empty_workspace(&Path("bar"), &NoVersion, "dest_workspace");
+   let _deleter = TmpDirDeleter::new(&dest_workspace);
    let rust_path = Some(~[(~"RUST_PATH", dest_workspace.to_str())]);
    command_line_test_with_env([~"build", ~"--rust-path-hack"], &source_dir, rust_path);
    debug2!("Checking that foo exists in {}", dest_workspace.to_str());
@@ -1339,11 +1405,13 @@ fn rust_path_hack_build_no_arg() {
 fn rust_path_install_target() {
     let dir_for_path = mkdtemp(&os::tmpdir(),
         "source_workspace").expect("rust_path_install_target failed");
+    let _deleter = TmpDirDeleter::new(&dir_for_path);
     let dir = mk_workspace(&dir_for_path, &Path("foo"), &NoVersion);
     debug2!("dir = {}", dir.to_str());
     writeFile(&dir.push("main.rs"), "fn main() { let _x = (); }");
     let dir_to_install_to = mkdtemp(&os::tmpdir(),
         "dest_workspace").expect("rust_path_install_target failed");
+    let _deleter = TmpDirDeleter::new(&dir_to_install_to);
     let dir = dir.pop().pop();
 
     let rust_path = Some(~[(~"RUST_PATH", format!("{}:{}", dir_to_install_to.to_str(),
@@ -1361,6 +1429,7 @@ fn rust_path_install_target() {
 fn sysroot_flag() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     // no-op sysroot setting; I'm not sure how else to test this
     command_line_test([~"--sysroot",
                        test_sysroot().to_str(),
@@ -1374,6 +1443,7 @@ fn sysroot_flag() {
 fn compile_flag_build() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([test_sysroot().to_str(),
                        ~"build",
                        ~"--no-link",
@@ -1388,6 +1458,7 @@ fn compile_flag_fail() {
     // --no-link shouldn't be accepted for install
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([test_sysroot().to_str(),
                        ~"install",
                        ~"--no-link",
@@ -1401,6 +1472,7 @@ fn compile_flag_fail() {
 fn notrans_flag_build() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     let flags_to_test = [~"--no-trans", ~"--parse-only",
                          ~"--pretty", ~"-S"];
 
@@ -1423,6 +1495,7 @@ fn notrans_flag_fail() {
     // --no-trans shouldn't be accepted for install
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     let flags_to_test = [~"--no-trans", ~"--parse-only",
                          ~"--pretty", ~"-S"];
     for flag in flags_to_test.iter() {
@@ -1444,6 +1517,7 @@ fn notrans_flag_fail() {
 fn dash_S() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([test_sysroot().to_str(),
                        ~"build",
                        ~"-S",
@@ -1458,6 +1532,7 @@ fn dash_S() {
 fn dash_S_fail() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([test_sysroot().to_str(),
                        ~"install",
                        ~"-S",
@@ -1472,6 +1547,7 @@ fn dash_S_fail() {
 fn test_cfg_build() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     // If the cfg flag gets messed up, this won't compile
     writeFile(&workspace.push_many(["src", "foo-0.1", "main.rs"]),
                "#[cfg(quux)] fn main() {}");
@@ -1488,6 +1564,7 @@ fn test_cfg_build() {
 fn test_cfg_fail() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     writeFile(&workspace.push_many(["src", "foo-0.1", "main.rs"]),
                "#[cfg(quux)] fn main() {}");
     match command_line_test_partial([test_sysroot().to_str(),
@@ -1504,6 +1581,7 @@ fn test_cfg_fail() {
 fn test_emit_llvm_S_build() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([test_sysroot().to_str(),
                        ~"build",
                        ~"-S", ~"--emit-llvm",
@@ -1519,6 +1597,7 @@ fn test_emit_llvm_S_build() {
 fn test_emit_llvm_S_fail() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([test_sysroot().to_str(),
                        ~"install",
                        ~"-S", ~"--emit-llvm",
@@ -1534,6 +1613,7 @@ fn test_emit_llvm_S_fail() {
 fn test_emit_llvm_build() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([test_sysroot().to_str(),
                        ~"build",
                        ~"--emit-llvm",
@@ -1550,6 +1630,7 @@ fn test_emit_llvm_build() {
 fn test_emit_llvm_fail() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([test_sysroot().to_str(),
                        ~"install",
                        ~"--emit-llvm",
@@ -1566,6 +1647,7 @@ fn test_emit_llvm_fail() {
 fn test_linker_build() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     let matches = getopts([], optgroups());
     let options = build_session_options(@"rustpkg",
                                         matches.get_ref(),
@@ -1606,6 +1688,7 @@ fn test_build_install_flags_fail() {
 fn test_optimized_build() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([test_sysroot().to_str(),
                        ~"build",
                        ~"-O",
@@ -1618,6 +1701,7 @@ fn pkgid_pointing_to_subdir() {
     // The actual repo is mockgithub.com/mozilla/some_repo
     // rustpkg should recognize that and treat the part after some_repo/ as a subdir
     let workspace = mkdtemp(&os::tmpdir(), "parent_repo").expect("Couldn't create temp dir");
+    let _deleter = TmpDirDeleter::new(&workspace);
     assert!(os::mkdir_recursive(&workspace.push_many([~"src", ~"mockgithub.com",
                                                      ~"mozilla", ~"some_repo"]), U_RWX));
 
@@ -1649,9 +1733,11 @@ fn test_recursive_deps() {
     let b_id = PkgId::new("b");
     let c_id = PkgId::new("c");
     let b_workspace = create_local_package_with_dep(&b_id, &c_id);
+    let _deleter = TmpDirDeleter::new(&b_workspace);
     writeFile(&b_workspace.push("src").push("c-0.1").push("lib.rs"),
                "pub fn g() {}");
     let a_workspace = create_local_package(&a_id);
+    let _deleter = TmpDirDeleter::new(&a_workspace);
     writeFile(&a_workspace.push("src").push("a-0.1").push("main.rs"),
                "extern mod b; use b::f; fn main() { f(); }");
     writeFile(&b_workspace.push("src").push("b-0.1").push("lib.rs"),
@@ -1670,7 +1756,9 @@ fn test_recursive_deps() {
 fn test_install_to_rust_path() {
     let p_id = PkgId::new("foo");
     let second_workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&second_workspace);
     let first_workspace = mk_empty_workspace(&Path("p"), &NoVersion, "dest");
+    let _deleter = TmpDirDeleter::new(&first_workspace);
     let rust_path = Some(~[(~"RUST_PATH",
                             format!("{}:{}", first_workspace.to_str(),
                                  second_workspace.to_str()))]);
@@ -1688,6 +1776,7 @@ fn test_install_to_rust_path() {
 fn test_target_specific_build_dir() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([test_sysroot().to_str(),
                        ~"build",
                        ~"foo"],
@@ -1701,6 +1790,7 @@ fn test_target_specific_build_dir() {
 fn test_target_specific_install_dir() {
     let p_id = PkgId::new("foo");
     let workspace = create_local_package(&p_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([test_sysroot().to_str(),
                        ~"install",
                        ~"foo"],
@@ -1718,6 +1808,7 @@ fn test_dependencies_terminate() {
     let b_id = PkgId::new("b");
 //    let workspace = create_local_package_with_dep(&b_id, &a_id);
     let workspace = create_local_package(&b_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     let b_dir = workspace.push_many([~"src", ~"b-0.1"]);
   //  writeFile(&b_dir.push("lib.rs"), "extern mod a; pub fn f() {}");
     let b_subdir = b_dir.push("test");
@@ -1731,6 +1822,7 @@ fn test_dependencies_terminate() {
 fn install_after_build() {
     let b_id = PkgId::new("b");
     let workspace = create_local_package(&b_id);
+    let _deleter = TmpDirDeleter::new(&workspace);
     command_line_test([~"build", ~"b"], &workspace);
     command_line_test([~"install", ~"b"], &workspace);
     assert_executable_exists(&workspace, b_id.short_name);
@@ -1741,6 +1833,7 @@ fn install_after_build() {
 fn reinstall() {
     let b = PkgId::new("b");
     let workspace = create_local_package(&b);
+    let _deleter = TmpDirDeleter::new(&workspace);
     // 1. Install, then remove executable file, then install again,
     // and make sure executable was re-installed
     command_line_test([~"install", ~"b"], &workspace);
@@ -1780,7 +1873,9 @@ fn correct_package_name_with_rust_path_hack() {
     let foo_id = PkgId::new("foo");
     let bar_id = PkgId::new("bar");
     let foo_workspace = create_local_package(&foo_id);
+    let _deleter = TmpDirDeleter::new(&foo_workspace);
     let dest_workspace = mk_empty_workspace(&Path("bar"), &NoVersion, "dest_workspace");
+    let _deleter = TmpDirDeleter::new(&dest_workspace);
 
     writeFile(&dest_workspace.push_many(["src", "bar-0.1", "main.rs"]),
               "extern mod blat; fn main() { let _x = (); }");
@@ -1804,6 +1899,7 @@ fn correct_package_name_with_rust_path_hack() {
 fn test_rustpkg_test_creates_exec() {
     let foo_id = PkgId::new("foo");
     let foo_workspace = create_local_package(&foo_id);
+    let _deleter = TmpDirDeleter::new(&foo_workspace);
     writeFile(&foo_workspace.push_many(["src", "foo-0.1", "test.rs"]),
               "#[test] fn f() { assert!('a' == 'a'); }");
     command_line_test([~"test", ~"foo"], &foo_workspace);
@@ -1813,6 +1909,7 @@ fn test_rustpkg_test_creates_exec() {
 #[test]
 fn test_rustpkg_test_output() {
     let workspace = create_local_package_with_test(&PkgId::new("foo"));
+    let _deleter = TmpDirDeleter::new(&workspace);
     let output = command_line_test([~"test", ~"foo"], &workspace);
     let output_str = str::from_utf8(output.output);
     // The first two assertions are separate because test output may
@@ -1827,6 +1924,7 @@ fn test_rustpkg_test_output() {
 fn test_rebuild_when_needed() {
     let foo_id = PkgId::new("foo");
     let foo_workspace = create_local_package(&foo_id);
+    let _deleter = TmpDirDeleter::new(&foo_workspace);
     let test_crate = foo_workspace.push_many(["src", "foo-0.1", "test.rs"]);
     writeFile(&test_crate, "#[test] fn f() { assert!('a' == 'a'); }");
     command_line_test([~"test", ~"foo"], &foo_workspace);
@@ -1846,6 +1944,7 @@ fn test_rebuild_when_needed() {
 fn test_no_rebuilding() {
     let foo_id = PkgId::new("foo");
     let foo_workspace = create_local_package(&foo_id);
+    let _deleter = TmpDirDeleter::new(&foo_workspace);
     let test_crate = foo_workspace.push_many(["src", "foo-0.1", "test.rs"]);
     writeFile(&test_crate, "#[test] fn f() { assert!('a' == 'a'); }");
     command_line_test([~"test", ~"foo"], &foo_workspace);

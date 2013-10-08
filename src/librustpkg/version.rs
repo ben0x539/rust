@@ -15,6 +15,7 @@ extern mod std;
 
 use extra::semver;
 use std::{char, os, result, run, str};
+use std::unstable::finally::Finally;
 use extra::tempfile::mkdtemp;
 use path_util::rust_path;
 
@@ -134,36 +135,42 @@ pub fn try_getting_version(remote_path: &Path) -> Option<Version> {
     if is_url_like(remote_path) {
         let tmp_dir = mkdtemp(&os::tmpdir(),
                               "test").expect("try_getting_version: couldn't create temp dir");
-        debug2!("(to get version) executing \\{git clone https://{} {}\\}",
-               remote_path.to_str(),
-               tmp_dir.to_str());
-        let outp  = run::process_output("git", [~"clone",
-                                                format!("https://{}",
-                                                        remote_path.to_str()),
-                                                tmp_dir.to_str()]);
-        if outp.status == 0 {
-            debug2!("Cloned it... ( {}, {} )",
-                   str::from_utf8(outp.output),
-                   str::from_utf8(outp.error));
-            let mut output = None;
-            debug2!("(getting version, now getting tags) executing \\{git --git-dir={} tag -l\\}",
-                   tmp_dir.push(".git").to_str());
-            let outp = run::process_output("git",
-                                           [format!("--git-dir={}", tmp_dir.push(".git").to_str()),
-                                            ~"tag", ~"-l"]);
-            let output_text = str::from_utf8(outp.output);
-            debug2!("Full output: ( {} ) [{:?}]", output_text, outp.status);
-            for l in output_text.line_iter() {
-                debug2!("A line of output: {}", l);
-                if !l.is_whitespace() {
-                    output = Some(l);
+        do (|| {
+            debug2!("(to get version) executing \\{git clone https://{} {}\\}",
+                   remote_path.to_str(),
+                   tmp_dir.to_str());
+            let outp  = run::process_output("git", [~"clone",
+                                                    format!("https://{}",
+                                                            remote_path.to_str()),
+                                                    tmp_dir.to_str()]);
+            if outp.status == 0 {
+                debug2!("Cloned it... ( {}, {} )",
+                       str::from_utf8(outp.output),
+                       str::from_utf8(outp.error));
+                let mut output = None;
+                debug2!("(getting version, now getting tags) executing \
+                         \\{git --git-dir={} tag -l\\}",
+                       tmp_dir.push(".git").to_str());
+                let outp = run::process_output("git",
+                                               [format!("--git-dir={}",
+                                                tmp_dir.push(".git").to_str()),
+                                                ~"tag", ~"-l"]);
+                let output_text = str::from_utf8(outp.output);
+                debug2!("Full output: ( {} ) [{:?}]", output_text, outp.status);
+                for l in output_text.line_iter() {
+                    debug2!("A line of output: {}", l);
+                    if !l.is_whitespace() {
+                        output = Some(l);
+                    }
                 }
-            }
 
-            output.and_then(try_parsing_version)
-        }
-        else {
-            None
+                output.and_then(try_parsing_version)
+            }
+            else {
+                None
+            }
+        }).finally {
+            os::remove_dir_recursive(&tmp_dir);
         }
     }
     else {

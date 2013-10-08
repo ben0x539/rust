@@ -14,6 +14,7 @@ use target::*;
 use package_id::PkgId;
 use std::path::Path;
 use std::os;
+use std::unstable::finally::Finally;
 use context::*;
 use crate::Crate;
 use messages::*;
@@ -167,15 +168,6 @@ impl PkgSrc {
     pub fn fetch_git(local: &Path, pkgid: &PkgId) -> Option<Path> {
         use conditions::failed_to_create_temp_dir::cond;
 
-        // We use a temporary directory because if the git clone fails,
-        // it creates the target directory anyway and doesn't delete it
-
-        let scratch_dir = extra::tempfile::mkdtemp(&os::tmpdir(), "rustpkg");
-        let clone_target = match scratch_dir {
-            Some(d) => d.push("rustpkg_temp"),
-            None    => cond.raise(~"Failed to create temporary directory for fetching git sources")
-        };
-
         debug2!("Checking whether {} (path = {}) exists locally. Cwd = {}, does it? {:?}",
                pkgid.to_str(), pkgid.path.to_str(),
                os::getcwd().to_str(),
@@ -194,23 +186,39 @@ impl PkgSrc {
             return None;
         }
 
-        let url = format!("https://{}", pkgid.path.to_str());
-        debug2!("Fetching package: git clone {} {} [version={}]",
-                  url, clone_target.to_str(), pkgid.version.to_str());
+        // We use a temporary directory because if the git clone fails,
+        // it creates the target directory anyway and doesn't delete it
 
-        if git_clone_general(url, &clone_target, &pkgid.version) {
-            // Since the operation succeeded, move clone_target to local.
-            // First, create all ancestor directories.
-            if make_dir_rwx_recursive(&local.pop())
-                && os::rename_file(&clone_target, local) {
-                 Some(local.clone())
+        let scratch_dir = extra::tempfile::mkdtemp(&os::tmpdir(), "rustpkg");
+        do (|| {
+            let clone_target = match scratch_dir {
+                Some(ref d) => d.push("rustpkg_temp"),
+                None        => cond.raise(~"Failed to create temporary directory \
+                                            for fetching git sources")
+            };
+
+            let url = format!("https://{}", pkgid.path.to_str());
+            debug2!("Fetching package: git clone {} {} [version={}]",
+                      url, clone_target.to_str(), pkgid.version.to_str());
+
+            if git_clone_general(url, &clone_target, &pkgid.version) {
+                // Since the operation succeeded, move clone_target to local.
+                // First, create all ancestor directories.
+                if make_dir_rwx_recursive(&local.pop())
+                    && os::rename_file(&clone_target, local) {
+                     Some(local.clone())
+                }
+                else {
+                     None
+                }
             }
             else {
-                 None
+                None
             }
-        }
-        else {
-            None
+        }).finally {
+            for dir in scratch_dir.iter() {
+                os::remove_dir_recursive(dir);
+            }
         }
     }
 
