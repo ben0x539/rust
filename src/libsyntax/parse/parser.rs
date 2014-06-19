@@ -2610,16 +2610,25 @@ impl<'a> Parser<'a> {
 
     // parse a 'for' .. 'in' expression ('for' token already eaten)
     pub fn parse_for_expr(&mut self, opt_ident: Option<ast::Ident>) -> Gc<Expr> {
-        // Parse: `for <src_pat> in <src_expr> <src_loop_block>`
+        // Parse: `for <src_pat>[: src_ty] in <src_expr> <src_loop_block>`
 
         let lo = self.last_span.lo;
         let pat = self.parse_pat();
+        let ty = if self.eat(&token::COLON) {
+            self.parse_ty(true)
+        } else {
+            P(Ty {
+                id: ast::DUMMY_NODE_ID,
+                node: TyInfer,
+                span: mk_sp(lo, lo)
+            })
+        };
         self.expect_keyword(keywords::In);
         let expr = self.parse_expr();
         let loop_block = self.parse_block();
         let hi = self.span.hi;
 
-        self.mk_expr(lo, hi, ExprForLoop(pat, expr, loop_block, opt_ident))
+        self.mk_expr(lo, hi, ExprForLoop(pat, ty, expr, loop_block, opt_ident))
     }
 
     pub fn parse_while_expr(&mut self) -> Gc<Expr> {

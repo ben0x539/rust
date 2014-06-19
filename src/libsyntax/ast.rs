@@ -453,7 +453,7 @@ pub enum Expr_ {
     ExprIf(Gc<Expr>, P<Block>, Option<Gc<Expr>>),
     ExprWhile(Gc<Expr>, P<Block>),
     // FIXME #6993: change to Option<Name>
-    ExprForLoop(Gc<Pat>, Gc<Expr>, P<Block>, Option<Ident>),
+    ExprForLoop(Gc<Pat>, Gc<Ty>, Gc<Expr>, P<Block>, Option<Ident>),
     // Conditionless loop (can be exited with break, cont, or ret)
     // FIXME #6993: change to Option<Name>
     ExprLoop(P<Block>, Option<Ident>),

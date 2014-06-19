@@ -843,8 +843,9 @@ pub fn noop_fold_expr<T: Folder>(e: Gc<Expr>, folder: &mut T) -> Gc<Expr> {
         ExprWhile(cond, body) => {
             ExprWhile(folder.fold_expr(cond), folder.fold_block(body))
         }
-        ExprForLoop(pat, iter, body, ref maybe_ident) => {
+        ExprForLoop(pat, ty, iter, body, ref maybe_ident) => {
             ExprForLoop(folder.fold_pat(pat),
+                        folder.fold_ty(ty),
                         folder.fold_expr(iter),
                         folder.fold_block(body),
                         maybe_ident.map(|i| folder.fold_ident(i)))

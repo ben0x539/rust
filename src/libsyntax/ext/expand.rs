@@ -129,7 +129,7 @@ pub fn expand_expr(e: Gc<ast::Expr>, fld: &mut MacroExpander) -> Gc<ast::Expr> {
         // Desugar expr_for_loop
         // From: `['<ident>:] for <src_pat> in <src_expr> <src_loop_block>`
         // FIXME #6993: change type of opt_ident to Option<Name>
-        ast::ExprForLoop(src_pat, src_expr, src_loop_block, opt_ident) => {
+        ast::ExprForLoop(src_pat, src_ty, src_expr, src_loop_block, opt_ident) => {
             // Expand any interior macros etc.
             // NB: we don't fold pats yet. Curious.
             let src_expr = fld.fold_expr(src_expr).clone();
@@ -145,7 +145,7 @@ pub fn expand_expr(e: Gc<ast::Expr>, fld: &mut MacroExpander) -> Gc<ast::Expr> {
             //         match i.next() {
             //           None => break,
             //           Some(mut value) => {
-            //             let <src_pat> = value;
+            //             let <src_pat>: <src_ty> = value;
             //             <src_loop_block>
             //           }
             //         }
@@ -154,7 +154,8 @@ pub fn expand_expr(e: Gc<ast::Expr>, fld: &mut MacroExpander) -> Gc<ast::Expr> {
             //   }
             //
             // (The use of the `let` is to give better error messages
-            // when the pattern is refutable.)
+            // when the pattern is refutable and to allow for an
+            // optional type of the yielded values.)
 
             let local_ident = token::gensym_ident("__i"); // FIXME #13573
             let next_ident = fld.cx.ident_of("next");
@@ -170,12 +171,12 @@ pub fn expand_expr(e: Gc<ast::Expr>, fld: &mut MacroExpander) -> Gc<ast::Expr> {
                 fld.cx.arm(span, vec!(none_pat), break_expr)
             };
 
-            // let <src_pat> = value;
+            // let <src_pat>: <src_ty> = value;
             let value_ident = token::gensym_ident("__value");
             // this is careful to use src_pat.span so that error
             // messages point exact at that.
             let local = box(GC) ast::Local {
-                ty: fld.cx.ty_infer(src_pat.span),
+                ty: src_ty,
                 pat: src_pat,
                 init: Some(fld.cx.expr_ident(src_pat.span, value_ident)),
                 id: ast::DUMMY_NODE_ID,
