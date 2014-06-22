@@ -172,7 +172,7 @@ pub fn get_enum_variant_types(ccx: &CrateCtxt,
                     ty: enum_ty
                 };
 
-                convert_struct(ccx, &*struct_def, tpt, variant.node.id);
+                convert_struct(ccx, &*struct_def, tpt, variant.node.id, variant.span);
 
                 let input_tys: Vec<_> = struct_def.fields.iter().map(
                     |f| ty::node_id_to_type(ccx.tcx, f.node.id)).collect();
@@ -498,7 +498,7 @@ pub fn convert(ccx: &CrateCtxt, it: &ast::Item) {
                 _ => {},
             }
 
-            convert_struct(ccx, &*struct_def, tpt, it.id);
+            convert_struct(ccx, &*struct_def, tpt, it.id, it.span);
         },
         ast::ItemTy(_, ref generics) => {
             ensure_no_ty_param_bounds(ccx, it.span, generics, "type");
@@ -523,7 +523,8 @@ pub fn convert(ccx: &CrateCtxt, it: &ast::Item) {
 pub fn convert_struct(ccx: &CrateCtxt,
                       struct_def: &ast::StructDef,
                       tpt: ty::ty_param_bounds_and_ty,
-                      id: ast::NodeId) {
+                      id: ast::NodeId,
+                      span: Span) {
     let tcx = ccx.tcx;
 
     // Write the type of each of the members and check for duplicate fields.
@@ -618,8 +619,20 @@ pub fn convert_struct(ccx: &CrateCtxt,
                     ty: ctor_fn_ty
                 });
             }
+
+            // Also don't allow a unit- or tuple-like struct to inherit
+            // or be inherited from.
+            if struct_def.is_virtual {
+                tcx.sess.span_err(span,
+                                  "unit-like or tuple structs cannot be virtual");
+            }
+            if struct_def.super_struct.is_some() {
+                tcx.sess.span_err(span,
+                                  "unit-like or tuple structs cannot inherit");
+            }
         }
     }
+
 }
 
 pub fn convert_foreign(ccx: &CrateCtxt, i: &ast::ForeignItem) {
