@@ -656,18 +656,18 @@ floating!(f64)
 
 // Implementation of Show for various core types
 
-macro_rules! delegate(($ty:ty to $other:ident) => {
+macro_rules! delegate(($ty:ty -> $other:ident) => {
     impl<'a> Show for $ty {
         fn fmt(&self, f: &mut Formatter) -> Result {
             (concat_idents!(secret_, $other)(self, f))
         }
     }
 })
-delegate!(&'a str to string)
-delegate!(bool to bool)
-delegate!(char to char)
-delegate!(f32 to float)
-delegate!(f64 to float)
+delegate!(&'a str -> string)
+delegate!(bool -> bool)
+delegate!(char -> char)
+delegate!(f32 -> float)
+delegate!(f64 -> float)
 
 impl<T> Show for *T {
     fn fmt(&self, f: &mut Formatter) -> Result { secret_pointer(self, f) }

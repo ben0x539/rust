@@ -116,7 +116,7 @@ pub trait Add<RHS,Result> {
 }
 
 macro_rules! add_impl(
-    ($($t:ty)*) => ($(
+    ($($t:ty),*) => ($(
         #[cfg(not(test))]
         impl Add<$t, $t> for $t {
             #[inline]
@@ -125,7 +125,7 @@ macro_rules! add_impl(
     )*)
 )
 
-add_impl!(uint u8 u16 u32 u64 int i8 i16 i32 i64 f32 f64)
+add_impl!(uint, u8, u16, u32, u64, int, i8, i16, i32, i64, f32, f64)
 
 /**
  *
@@ -158,7 +158,7 @@ pub trait Sub<RHS,Result> {
 }
 
 macro_rules! sub_impl(
-    ($($t:ty)*) => ($(
+    ($($t:ty),*) => ($(
         #[cfg(not(test))]
         impl Sub<$t, $t> for $t {
             #[inline]
@@ -167,7 +167,7 @@ macro_rules! sub_impl(
     )*)
 )
 
-sub_impl!(uint u8 u16 u32 u64 int i8 i16 i32 i64 f32 f64)
+sub_impl!(uint, u8, u16, u32, u64, int, i8, i16, i32, i64, f32, f64)
 
 /**
  *
@@ -200,7 +200,7 @@ pub trait Mul<RHS,Result> {
 }
 
 macro_rules! mul_impl(
-    ($($t:ty)*) => ($(
+    ($($t:ty),*) => ($(
         #[cfg(not(test))]
         impl Mul<$t, $t> for $t {
             #[inline]
@@ -209,7 +209,7 @@ macro_rules! mul_impl(
     )*)
 )
 
-mul_impl!(uint u8 u16 u32 u64 int i8 i16 i32 i64 f32 f64)
+mul_impl!(uint, u8, u16, u32, u64, int, i8, i16, i32, i64, f32, f64)
 
 /**
  *
@@ -242,7 +242,7 @@ pub trait Div<RHS,Result> {
 }
 
 macro_rules! div_impl(
-    ($($t:ty)*) => ($(
+    ($($t:ty),*) => ($(
         #[cfg(not(test))]
         impl Div<$t, $t> for $t {
             #[inline]
@@ -251,7 +251,7 @@ macro_rules! div_impl(
     )*)
 )
 
-div_impl!(uint u8 u16 u32 u64 int i8 i16 i32 i64 f32 f64)
+div_impl!(uint, u8, u16, u32, u64, int, i8, i16, i32, i64, f32, f64)
 
 /**
  *
@@ -284,7 +284,7 @@ pub trait Rem<RHS,Result> {
 }
 
 macro_rules! rem_impl(
-    ($($t:ty)*) => ($(
+    ($($t:ty),*) => ($(
         #[cfg(not(test))]
         impl Rem<$t, $t> for $t {
             #[inline]
@@ -306,7 +306,7 @@ macro_rules! rem_float_impl(
     }
 )
 
-rem_impl!(uint u8 u16 u32 u64 int i8 i16 i32 i64)
+rem_impl!(uint, u8, u16, u32, u64, int, i8, i16, i32, i64)
 rem_float_impl!(f32, fmodf)
 rem_float_impl!(f64, fmod)
 
@@ -341,7 +341,7 @@ pub trait Neg<Result> {
 }
 
 macro_rules! neg_impl(
-    ($($t:ty)*) => ($(
+    ($($t:ty),*) => ($(
         #[cfg(not(test))]
         impl Neg<$t> for $t {
             #[inline]
@@ -360,7 +360,7 @@ macro_rules! neg_uint_impl(
     }
 )
 
-neg_impl!(int i8 i16 i32 i64 f32 f64)
+neg_impl!(int, i8, i16, i32, i64, f32, f64)
 
 neg_uint_impl!(uint, int)
 neg_uint_impl!(u8, i8)
@@ -401,7 +401,7 @@ pub trait Not<Result> {
 
 
 macro_rules! not_impl(
-    ($($t:ty)*) => ($(
+    ($($t:ty),*) => ($(
         #[cfg(not(test))]
         impl Not<$t> for $t {
             #[inline]
@@ -410,7 +410,7 @@ macro_rules! not_impl(
     )*)
 )
 
-not_impl!(bool uint u8 u16 u32 u64 int i8 i16 i32 i64)
+not_impl!(bool, uint, u8, u16, u32, u64, int, i8, i16, i32, i64)
 
 /**
  *
@@ -443,7 +443,7 @@ pub trait BitAnd<RHS,Result> {
 }
 
 macro_rules! bitand_impl(
-    ($($t:ty)*) => ($(
+    ($($t:ty),*) => ($(
         #[cfg(not(test))]
         impl BitAnd<$t, $t> for $t {
             #[inline]
@@ -452,7 +452,7 @@ macro_rules! bitand_impl(
     )*)
 )
 
-bitand_impl!(bool uint u8 u16 u32 u64 int i8 i16 i32 i64)
+bitand_impl!(bool, uint, u8, u16, u32, u64, int, i8, i16, i32, i64)
 
 /**
  *
@@ -485,7 +485,7 @@ pub trait BitOr<RHS,Result> {
 }
 
 macro_rules! bitor_impl(
-    ($($t:ty)*) => ($(
+    ($($t:ty),*) => ($(
         #[cfg(not(test))]
         impl BitOr<$t,$t> for $t {
             #[inline]
@@ -494,7 +494,7 @@ macro_rules! bitor_impl(
     )*)
 )
 
-bitor_impl!(bool uint u8 u16 u32 u64 int i8 i16 i32 i64)
+bitor_impl!(bool, uint, u8, u16, u32, u64, int, i8, i16, i32, i64)
 
 /**
  *
@@ -527,7 +527,7 @@ pub trait BitXor<RHS,Result> {
 }
 
 macro_rules! bitxor_impl(
-    ($($t:ty)*) => ($(
+    ($($t:ty),*) => ($(
         #[cfg(not(test))]
         impl BitXor<$t, $t> for $t {
             #[inline]
@@ -536,7 +536,7 @@ macro_rules! bitxor_impl(
     )*)
 )
 
-bitxor_impl!(bool uint u8 u16 u32 u64 int i8 i16 i32 i64)
+bitxor_impl!(bool, uint, u8, u16, u32, u64, int, i8, i16, i32, i64)
 
 /**
  *
@@ -569,7 +569,7 @@ pub trait Shl<RHS,Result> {
 }
 
 macro_rules! shl_impl(
-    ($($t:ty)*) => ($(
+    ($($t:ty),*) => ($(
         #[cfg(stage0)]
         impl Shl<$t, $t> for $t {
             #[inline]
@@ -585,7 +585,7 @@ macro_rules! shl_impl(
     )*)
 )
 
-shl_impl!(uint u8 u16 u32 u64 int i8 i16 i32 i64)
+shl_impl!(uint, u8, u16, u32, u64, int, i8, i16, i32, i64)
 
 /**
  *
@@ -618,7 +618,7 @@ pub trait Shr<RHS,Result> {
 }
 
 macro_rules! shr_impl(
-    ($($t:ty)*) => ($(
+    ($($t:ty),*) => ($(
         #[cfg(stage0, not(test))]
         impl Shr<$t, $t> for $t {
             #[inline]
@@ -632,7 +632,7 @@ macro_rules! shr_impl(
     )*)
 )
 
-shr_impl!(uint u8 u16 u32 u64 int i8 i16 i32 i64)
+shr_impl!(uint, u8, u16, u32, u64, int, i8, i16, i32, i64)
 
 /**
  *

@@ -198,7 +198,7 @@ mod impls {
               Less, Greater, Equal};
 
     macro_rules! eq_impl(
-        ($($t:ty)*) => ($(
+        ($($t:ty),*) => ($(
             impl PartialEq for $t {
                 #[inline]
                 fn eq(&self, other: &$t) -> bool { (*self) == (*other) }
@@ -215,18 +215,18 @@ mod impls {
         fn ne(&self, _other: &()) -> bool { false }
     }
 
-    eq_impl!(bool char uint u8 u16 u32 u64 int i8 i16 i32 i64 f32 f64)
+    eq_impl!(bool, char, uint, u8, u16, u32, u64, int, i8, i16, i32, i64, f32, f64)
 
     macro_rules! totaleq_impl(
-        ($($t:ty)*) => ($(
+        ($($t:ty),*) => ($(
             impl Eq for $t {}
         )*)
     )
 
-    totaleq_impl!(() bool char uint u8 u16 u32 u64 int i8 i16 i32 i64)
+    totaleq_impl!((), bool, char, uint, u8, u16, u32, u64, int, i8, i16, i32, i64)
 
     macro_rules! ord_impl(
-        ($($t:ty)*) => ($(
+        ($($t:ty),*) => ($(
             impl PartialOrd for $t {
                 #[inline]
                 fn lt(&self, other: &$t) -> bool { (*self) < (*other) }
@@ -252,10 +252,10 @@ mod impls {
         }
     }
 
-    ord_impl!(char uint u8 u16 u32 u64 int i8 i16 i32 i64 f32 f64)
+    ord_impl!(char, uint, u8, u16, u32, u64, int, i8, i16, i32, i64, f32, f64)
 
     macro_rules! totalord_impl(
-        ($($t:ty)*) => ($(
+        ($($t:ty),*) => ($(
             impl Ord for $t {
                 #[inline]
                 fn cmp(&self, other: &$t) -> Ordering {
@@ -279,7 +279,7 @@ mod impls {
         }
     }
 
-    totalord_impl!(char uint u8 u16 u32 u64 int i8 i16 i32 i64)
+    totalord_impl!(char, uint, u8, u16, u32, u64, int, i8, i16, i32, i64)
 
     // & pointers
     impl<'a, T: PartialEq> PartialEq for &'a T {

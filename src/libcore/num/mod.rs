@@ -34,12 +34,12 @@ pub trait Num: PartialEq + Zero + One
              + Rem<Self,Self> {}
 
 macro_rules! trait_impl(
-    ($name:ident for $($t:ty)*) => ($(
+    ($name:ident for $($t:ty),*) => ($(
         impl $name for $t {}
     )*)
 )
 
-trait_impl!(Num for uint u8 u16 u32 u64 int i8 i16 i32 i64 f32 f64)
+trait_impl!(Num for uint, u8, u16, u32, u64, int, i8, i16, i32, i64, f32, f64)
 
 /// Simultaneous division and remainder
 #[inline]
@@ -200,7 +200,7 @@ pub trait Signed: Num + Neg<Self> {
 }
 
 macro_rules! signed_impl(
-    ($($t:ty)*) => ($(
+    ($($t:ty),*) => ($(
         impl Signed for $t {
             #[inline]
             fn abs(&self) -> $t {
@@ -230,7 +230,7 @@ macro_rules! signed_impl(
     )*)
 )
 
-signed_impl!(int i8 i16 i32 i64)
+signed_impl!(int, i8, i16, i32, i64)
 
 macro_rules! signed_float_impl(
     ($t:ty, $nan:expr, $inf:expr, $neg_inf:expr, $fabs:path, $fcopysign:path, $fdim:ident) => {
@@ -313,7 +313,7 @@ pub fn abs_sub<T: Signed>(x: T, y: T) -> T {
 /// A trait for values which cannot be negative
 pub trait Unsigned: Num {}
 
-trait_impl!(Unsigned for uint u8 u16 u32 u64)
+trait_impl!(Unsigned for uint, u8, u16, u32, u64)
 
 /// Raises a value to the power of exp, using exponentiation by squaring.
 ///
@@ -386,7 +386,7 @@ pub trait Primitive: Copy
                    + PartialOrd
                    + Bounded {}
 
-trait_impl!(Primitive for uint u8 u16 u32 u64 int i8 i16 i32 i64 f32 f64)
+trait_impl!(Primitive for uint, u8, u16, u32, u64, int, i8, i16, i32, i64, f32, f64)
 
 /// A primitive signed or unsigned integer equipped with various bitwise
 /// operators, bit counting methods, and endian conversion functions.
@@ -1359,7 +1359,7 @@ checkeddiv_int_impl!(i32, i32::MIN)
 checkeddiv_int_impl!(i64, i64::MIN)
 
 macro_rules! checkeddiv_uint_impl(
-    ($($t:ty)*) => ($(
+    ($($t:ty),*) => ($(
         impl CheckedDiv for $t {
             #[inline]
             fn checked_div(&self, v: &$t) -> Option<$t> {
@@ -1373,7 +1373,7 @@ macro_rules! checkeddiv_uint_impl(
     )*)
 )
 
-checkeddiv_uint_impl!(uint u8 u16 u32 u64)
+checkeddiv_uint_impl!(uint, u8, u16, u32, u64)
 
 /// Helper function for testing numeric operations
 #[cfg(test)]

@@ -169,22 +169,6 @@ macro_rules! maybe_whole_expr (
 
 // As above, but for things other than expressions
 macro_rules! maybe_whole (
-    ($p:expr, $constructor:ident) => (
-        {
-            let found = match ($p).token {
-                INTERPOLATED(token::$constructor(_)) => {
-                    Some(($p).bump_and_get())
-                }
-                _ => None
-            };
-            match found {
-                Some(INTERPOLATED(token::$constructor(x))) => {
-                    return x.clone()
-                }
-                _ => {}
-            }
-        }
-    );
     (no_clone $p:expr, $constructor:ident) => (
         {
             let found = match ($p).token {
@@ -264,7 +248,23 @@ macro_rules! maybe_whole (
                 _ => {}
             }
         }
-    )
+    );
+    ($p:expr, $constructor:ident) => (
+        {
+            let found = match ($p).token {
+                INTERPOLATED(token::$constructor(_)) => {
+                    Some(($p).bump_and_get())
+                }
+                _ => None
+            };
+            match found {
+                Some(INTERPOLATED(token::$constructor(x))) => {
+                    return x.clone()
+                }
+                _ => {}
+            }
+        }
+    );
 )
 
 
@@ -1626,6 +1626,33 @@ impl<'a> Parser<'a> {
         loop {
             // First, parse an identifier.
             let identifier = self.parse_ident();
+
+            // Then see if there's a bare identifier, which we'll take as
+            // a singleton type parameter list.
+            if mode != NoTypesAllowed &&
+               is_ident(&self.token) && !token::is_any_keyword(&self.token) {
+                let ty_lo = self.span.lo;
+                let PathAndBounds {
+                    path,
+                    bounds
+                } = self.parse_path(LifetimeAndTypesAndBounds);
+
+                let sp = mk_sp(ty_lo, self.last_span.hi);
+                let ty_ = TyPath(path, bounds, ast::DUMMY_NODE_ID);
+                let ty = P(Ty {id: ast::DUMMY_NODE_ID, node: ty_, span: sp});
+                segments.push(ast::PathSegment {
+                    identifier: identifier,
+                    lifetimes: Vec::new(),
+                    types: OwnedSlice::from_vec(vec![ty]),
+                });
+                if self.eat(&token::MOD_SEP) {
+                    continue
+                } else {
+                    break
+                }
+            }
+
+            // Otherwise, check for a `<`/`>`-enclosed generics list.
 
             // Parse the '::' before type parameters if it's required. If
             // it is required and wasn't present, then we're done.

@@ -10,4 +10,3 @@
 
 type mut_box = Box<mut int>;
     //~^  ERROR found `mut` in ident position
-    //~^^ ERROR expected `,` but found `int`
